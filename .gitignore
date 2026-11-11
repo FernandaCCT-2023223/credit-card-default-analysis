@@ -4,3 +4,7 @@
 .Rproj.user/
 .DS_Store
 Thumbs.db
+
+# Original datasets
+data/original/*
+!data/original/.gitkeep
