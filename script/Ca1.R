@@ -41,6 +41,7 @@ unique(credit_card$PAY_2)
 unique(credit_card$PAY_3)
 unique(credit_card$PAY_4)
 unique(credit_card$PAY_5)
+unique(credit_card$PAY_6)
 
 
 # ======== identify potential outliers ========
@@ -238,3 +239,60 @@ marriage_unusual <- credit_card[
 ]
 
 head(marriage_unusual, 10)
+
+
+# ======== Analyse categorical variables ========
+
+# Check education category proportions
+prop.table(table(credit_card$EDUCATION))
+
+# Check marriage category proportions
+prop.table(table(credit_card$MARRIAGE))
+
+# Check gender category proportions
+prop.table(table(credit_card$SEX))
+
+# Check default payment proportions
+prop.table(table(credit_card$default.payment.next.month))
+
+
+# ======== Compare categorical variables with default ========
+
+# Education and default payment
+table(credit_card$EDUCATION,
+      credit_card$default.payment.next.month)
+
+# Marriage and default payment
+table(credit_card$MARRIAGE,
+      credit_card$default.payment.next.month)
+
+# Sex and default payment
+table(credit_card$SEX,
+      credit_card$default.payment.next.month)
+
+
+# ======== Calculate default proportions by category ========
+
+# Education and default proportions
+prop.table(
+  table(credit_card$EDUCATION,
+        credit_card$default.payment.next.month),
+  margin = 1
+)
+
+# Marriage and default proportions
+prop.table(
+  table(credit_card$MARRIAGE,
+        credit_card$default.payment.next.month),
+  margin = 1
+)
+
+# Sex and default proportions
+prop.table(
+  table(credit_card$SEX,
+        credit_card$default.payment.next.month),
+  margin = 1
+)
+
+
+
