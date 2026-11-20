@@ -1,6 +1,6 @@
-install.packages("mosaic")
-install.packages("reshape2")
-install.packages("factoextra")
+#install.packages("mosaic")
+#install.packages("reshape2")
+#install.packages("factoextra")
 
 library(reshape2)
 library(factoextra)
@@ -774,3 +774,4 @@ legend(
   col = c("steelblue", "darkorange"),
   pch = 16
 )
+
