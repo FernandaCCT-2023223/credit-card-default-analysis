@@ -80,12 +80,12 @@ par(mfrow = c(1, 1))
 count_outliers <- function(x) {
   Q1 <- quantile(x, 0.25, na.rm = TRUE)
   Q3 <- quantile(x, 0.75, na.rm = TRUE)
-
+  
   IQR_value <- IQR(x, na.rm = TRUE)
-
+  
   lower_limit <- Q1 - 1.5 * IQR_value
   upper_limit <- Q3 + 1.5 * IQR_value
-
+  
   sum(x < lower_limit | x > upper_limit, na.rm = TRUE)
 }
 
@@ -101,15 +101,15 @@ outlier_counts
 # ======== Calculate IQR boundaries ========
 
 calculate_iqr <- function(x) {
-
+  
   Q1 <- quantile(x, 0.25, na.rm = TRUE)
   Q3 <- quantile(x, 0.75, na.rm = TRUE)
-
+  
   IQR_value <- IQR(x, na.rm = TRUE)
-
+  
   lower_limit <- Q1 - 1.5 * IQR_value
   upper_limit <- Q3 + 1.5 * IQR_value
-
+  
   c(
     lower_limit = lower_limit,
     upper_limit = upper_limit
@@ -257,74 +257,88 @@ marriage_unusual <- credit_card[
 head(marriage_unusual, 10)
 
 
-# ======== Analyse categorical variables ========
+# ======== Data Cleaning ========
 
-# Check education category proportions
+# Keep a copy of the original data before cleaning
+credit_raw <- credit_card
+
+# EDUCATION: values 0, 5 and 6 are not documented
+# (1 = graduate school, 2 = university, 3 = high school, 4 = others)
+# Group them into category 4 (others)
+credit_card$EDUCATION[credit_card$EDUCATION %in% c(0, 5, 6)] <- 4
+
+# MARRIAGE: value 0 is not documented
+# (1 = married, 2 = single, 3 = others)
+# Group it into category 3 (others)
+credit_card$MARRIAGE[credit_card$MARRIAGE == 0] <- 3
+
+# Check the categories after cleaning
+table(credit_card$EDUCATION)
+table(credit_card$MARRIAGE)
+
+# Outliers: the values identified by the IQR method were kept.
+# High credit limits, bills and payments are realistic for financial data
+# (right-skewed distributions), so they are not data entry errors.
+
+# Negative bill amounts were kept: they represent a credit balance
+# (the customer paid more than the bill amount).
+
+# Confirm the size of the cleaned dataset (requirement: >= 3000 rows, >= 7 columns)
+dim(credit_card)
+
+# Save the cleaned dataset
+dir.create("data/clean", showWarnings = FALSE, recursive = TRUE)
+write.csv(credit_card, "data/clean/credit_card_clean.csv", row.names = FALSE)
+
+
+# ============================================================
+# EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================
+# Main question: what customer characteristics and payment
+# behaviours are linked to default next month?
+# I split it into smaller questions below, one per section.
+
+
+# ======== Q1: Education, marriage, sex and default ========
+# Do some groups of customers default more than others?
+# First I look at how big each group is, then I compare
+# the default rate inside each group.
+
+# How many customers are in each category (proportions)
 prop.table(table(credit_card$EDUCATION))
-
-# Check marriage category proportions
 prop.table(table(credit_card$MARRIAGE))
-
-# Check gender category proportions
 prop.table(table(credit_card$SEX))
 
-# Check default payment proportions
+# Overall default rate, to have a reference value
 prop.table(table(credit_card$default.payment.next.month))
 
-# ======== Compare categorical variables with default ========
+# Counts of default (0/1) in each category
+table(credit_card$EDUCATION, credit_card$default.payment.next.month)
+table(credit_card$MARRIAGE, credit_card$default.payment.next.month)
+table(credit_card$SEX, credit_card$default.payment.next.month)
 
-# Education and default payment
-table(
-  credit_card$EDUCATION,
-  credit_card$default.payment.next.month
-)
-
-# Marriage and default payment
-table(
-  credit_card$MARRIAGE,
-  credit_card$default.payment.next.month
-)
-
-# Sex and default payment
-table(
-  credit_card$SEX,
-  credit_card$default.payment.next.month
-)
-
-
-# ======== Calculate default proportions by category ========
-
-# Education and default proportions
+# Default rate per category (margin = 1 so each row adds up to 1)
 prop.table(
-  table(
-    credit_card$EDUCATION,
-    credit_card$default.payment.next.month
-  ),
+  table(credit_card$EDUCATION, credit_card$default.payment.next.month),
   margin = 1
 )
 
-# Marriage and default proportions
 prop.table(
-  table(
-    credit_card$MARRIAGE,
-    credit_card$default.payment.next.month
-  ),
+  table(credit_card$MARRIAGE, credit_card$default.payment.next.month),
   margin = 1
 )
 
-# Sex and default proportions
 prop.table(
-  table(
-    credit_card$SEX,
-    credit_card$default.payment.next.month
-  ),
+  table(credit_card$SEX, credit_card$default.payment.next.month),
   margin = 1
 )
 
+# Finding:
 
-# ======== Credit Limit and Default Analysis ========
 
-# Compare credit limits between customers with and without default
+# ======== Q2: Credit limit and default ========
+# Do customers who default have lower credit limits?
+
 boxplot(
   LIMIT_BAL ~ default.payment.next.month,
   data = credit_card,
@@ -334,10 +348,12 @@ boxplot(
   col = "lightblue"
 )
 
+# Finding:
 
-# ======== Age Distribution Analysis ========
 
-# Display the distribution of customer ages
+# ======== Q3: Age distribution ========
+# What is the age profile of the customers?
+
 hist(
   credit_card$AGE,
   main = "Age Distribution of Credit Card Clients",
@@ -347,37 +363,27 @@ hist(
   breaks = 15
 )
 
+# Finding:
 
-# ======== Payment Status and Default Analysis ========
 
-# Compare payment status with default payment
-table(
-  credit_card$PAY_0,
-  credit_card$default.payment.next.month
-)
+# ======== Q4: Previous payment status and default ========
+# If a customer was late paying last month, are they more
+# likely to default next month?
+# PAY_0 codes: -2 = no consumption, -1 = paid in full,
+# 0 = revolving credit, 1 to 8 = months of delay
 
-# ======== Calculate Default Proportions by Payment Status ========
+# Counts per payment status
+table(credit_card$PAY_0, credit_card$default.payment.next.month)
 
-# Calculate default proportions for each payment status
-prop.table(
-  table(
-    credit_card$PAY_0,
-    credit_card$default.payment.next.month
-  ),
-  margin = 1
-)
-# ======== Default Rate by Payment Status ========
-
-# Calculate default proportions for each payment status
+# Default rate per payment status
 default_by_pay <- prop.table(
-  table(
-    credit_card$PAY_0,
-    credit_card$default.payment.next.month
-  ),
+  table(credit_card$PAY_0, credit_card$default.payment.next.month),
   margin = 1
 )
 
-# Display default rates by payment status
+default_by_pay
+
+# Bar chart with only the default rate (column "1")
 barplot(
   default_by_pay[, "1"],
   main = "Default Rate by Previous Payment Status",
@@ -387,9 +393,12 @@ barplot(
   ylim = c(0, 1)
 )
 
-# ======== Bill Amount and Default Analysis ========
+# Finding:
 
-# Compare bill amounts between customers with and without default
+
+# ======== Q5: Bill amount and default ========
+# Do customers who default have higher or lower bills?
+
 boxplot(
   BILL_AMT1 ~ default.payment.next.month,
   data = credit_card,
@@ -398,64 +407,50 @@ boxplot(
   ylab = "Bill Amount",
   col = "lightblue"
 )
-# ======== Payment Amount and Default Analysis ========
 
-# Compare median payment amounts between default groups
-aggregate(
-  credit_card[paste0("PAY_AMT", 1:6)],
-  by = list(Default = credit_card$default.payment.next.month),
-  FUN = median
-)
-# ======== Bill Amount and Default Analysis ========
-
-# Compare median bill amounts between default groups
+# The boxplot is hard to read because of the outliers,
+# so I also compare the medians for the six months
 aggregate(
   credit_card[paste0("BILL_AMT", 1:6)],
   by = list(Default = credit_card$default.payment.next.month),
   FUN = median
 )
-# ======== Payment Amount Correlation Analysis ========
 
-# Select payment amount variables
-payment_vars <- credit_card[paste0("PAY_AMT", 1:6)]
+# Finding:
 
-# Calculate correlation between payment variables
-payment_correlation <- cor(payment_vars)
 
-# Display correlation matrix
-payment_correlation
+# ======== Q6: Payment amount and default ========
+# Do customers who default pay smaller amounts?
+# I used the median because payments are very skewed
 
-# ======== Reshape Payment Amount Data ========
-
-# Transform payment variables from wide to long format
-payment_long <- melt(
-  credit_card,
-  id.vars = c("ID", "default.payment.next.month"),
-  measure.vars = paste0("PAY_AMT", 1:6),
-  variable.name = "Payment_Month",
-  value.name = "Payment_Amount"
+aggregate(
+  credit_card[paste0("PAY_AMT", 1:6)],
+  by = list(Default = credit_card$default.payment.next.month),
+  FUN = median
 )
 
-# ======== Bill Amount Correlation Analysis ========
+# Finding:
 
-#Select bill amount variables
+
+# ======== Q7: Correlation between months ========
+# Are the amounts of one month related to the next months?
+# (covariation between features)
+
+# Payments
+payment_vars <- credit_card[paste0("PAY_AMT", 1:6)]
+payment_correlation <- cor(payment_vars)
+payment_correlation
+
+# Bills
 bill_vars <- credit_card[paste0("BILL_AMT", 1:6)]
-
-# Calculate correlation between bill amount variables
 bill_correlation <- cor(bill_vars)
-
-# Display correlation matrix
 bill_correlation
 
-
-# ======== Bill Amount Correlation Heatmap ========
-
-# Create colour palette
+# Heatmap for the bill correlation
 bill_colors <- colorRampPalette(
   c("white", "lightblue", "steelblue")
 )(100)
 
-# Display correlation heatmap
 image(
   x = 1:6,
   y = 1:6,
@@ -467,11 +462,11 @@ image(
   main = "Correlation Between Monthly Bill Amounts"
 )
 
-# Display variable names
+# Variable names on both axes (same order as the matrix)
 axis(1, at = 1:6, labels = colnames(bill_correlation))
-axis(2, at = 1:6, labels = rev(rownames(bill_correlation)))
+axis(2, at = 1:6, labels = rownames(bill_correlation))
 
-# Add correlation values inside each square
+# Correlation value inside each square
 text(
   x = rep(1:6, each = 6),
   y = rep(1:6, times = 6),
@@ -479,9 +474,175 @@ text(
   cex = 0.9
 )
 
-# Add axis titles
 title(
   xlab = "Bill Amount Variables",
   ylab = "Bill Amount Variables"
 )
+
+# Finding:
+
+
+# ======== Q8: Payments over the six months ========
+# Does the payment behaviour change over time, and is it
+# different for customers who default?
+
+# Wide to long format: one row per customer per month
+payment_long <- melt(
+  credit_card,
+  id.vars = c("ID", "default.payment.next.month"),
+  measure.vars = paste0("PAY_AMT", 1:6),
+  variable.name = "Payment_Month",
+  value.name = "Payment_Amount"
+)
+
+# Quick check of the new format
+head(payment_long)
+dim(payment_long)
+str(payment_long)
+
+# Median payment for each month and each default group
+payment_medians <- aggregate(
+  Payment_Amount ~ Payment_Month + default.payment.next.month,
+  data = payment_long,
+  FUN = median
+)
+
+payment_medians
+
+# Back to wide format: one column per default group
+payment_medians_wide <- dcast(
+  payment_medians,
+  Payment_Month ~ default.payment.next.month,
+  value.var = "Payment_Amount"
+)
+
+payment_medians_wide
+
+# Matrix with the two groups to plot both lines together
+payment_matrix <- as.matrix(payment_medians_wide[, -1])
+
+matplot(
+  1:6,
+  payment_matrix,
+  type = "b",
+  pch = c(16, 17),
+  lty = 1,
+  col = c("steelblue", "darkorange"),
+  xaxt = "n",
+  main = "Monthly Payment Behaviour by Default Status",
+  xlab = "Payment Month",
+  ylab = "Median Payment Amount"
+)
+
+axis(1, at = 1:6, labels = payment_medians_wide$Payment_Month)
+
+legend(
+  "topright",
+  legend = c("No Default", "Default"),
+  col = c("steelblue", "darkorange"),
+  pch = c(16, 17),
+  lty = 1
+)
+
+# Finding:
+
+
+# ======== Q9: Age and credit limit ========
+# Do older customers get higher limits? Does it look
+# different for the customers who default?
+
+plot(
+  credit_card$AGE,
+  credit_card$LIMIT_BAL,
+  col = ifelse(
+    credit_card$default.payment.next.month == 1,
+    "darkorange",
+    "steelblue"
+  ),
+  pch = 16,
+  main = "Age and Credit Limit by Default Status",
+  xlab = "Customer Age",
+  ylab = "Credit Limit"
+)
+
+legend(
+  "topright",
+  legend = c("No Default", "Default"),
+  col = c("steelblue", "darkorange"),
+  pch = 16
+)
+
+# Finding:
+
+
+# ======== Q10: Default rate by age ========
+# Does the chance of default change with age?
+# The mean of a 0/1 variable is the default rate
+
+default_by_age <- aggregate(
+  credit_card$default.payment.next.month,
+  by = list(Age = credit_card$AGE),
+  FUN = mean
+)
+
+plot(
+  default_by_age$Age,
+  default_by_age$x,
+  type = "l",
+  lwd = 2,
+  col = "steelblue",
+  main = "Default Rate by Customer Age",
+  xlab = "Customer Age",
+  ylab = "Default Rate",
+  ylim = c(0, 1)
+)
+
+# Note: very old ages have few customers, so the line jumps
+# a lot there - those spikes are not reliable
+
+# Finding:
+
+
+# ============================================================
+#============== ENCODING CATEGORICAL VARIABLES ===============
+# ============================================================
+
+
+# Copy of the cleaned data, so the EDA data stays the same
+credit_encoded <- credit_card
+
+# SEX has only two values -> binary (label) encoding
+# 1 = female, 0 = male
+credit_encoded$SEX_FEMALE <- ifelse(credit_encoded$SEX == 2, 1, 0)
+
+# EDUCATION and MARRIAGE have no natural order -> one-hot encoding
+credit_encoded$EDUCATION <- factor(
+  credit_encoded$EDUCATION,
+  levels = 1:4,
+  labels = c("GradSchool", "University", "HighSchool", "Other")
+)
+
+credit_encoded$MARRIAGE <- factor(
+  credit_encoded$MARRIAGE,
+  levels = 1:3,
+  labels = c("Married", "Single", "Other")
+)
+
+# One 0/1 column for each category
+education_dummies <- model.matrix(~ EDUCATION - 1, data = credit_encoded)
+marriage_dummies  <- model.matrix(~ MARRIAGE - 1, data = credit_encoded)
+
+credit_encoded <- cbind(credit_encoded, education_dummies, marriage_dummies)
+
+# Remove the original columns (they are encoded now)
+credit_encoded$SEX       <- NULL
+credit_encoded$EDUCATION <- NULL
+credit_encoded$MARRIAGE  <- NULL
+
+# PAY_0 to PAY_6 are ordinal (months of delay),
+# so they keep their numeric values
+
+# Check the result
+head(credit_encoded)
+dim(credit_encoded)
 
