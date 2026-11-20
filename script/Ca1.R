@@ -1,7 +1,9 @@
 install.packages("mosaic")
 install.packages("reshape2")
+install.packages("factoextra")
 
 library(reshape2)
+library(factoextra)
 
 #import the dataset and data cleaning
 credit_card <- read.csv("data/original/default of credit card clients.csv", skip = 1)
@@ -333,6 +335,17 @@ prop.table(
   margin = 1
 )
 
+# Mosaic plot: education and default
+# The width of each bar shows the size of the group,
+# the height of each colour shows the proportion of default
+mosaicplot(
+  table(credit_card$EDUCATION, credit_card$default.payment.next.month),
+  main = "Education and Default Status",
+  xlab = "Education (1 = Grad School, 2 = University, 3 = High School, 4 = Other)",
+  ylab = "Default (0 = No, 1 = Yes)",
+  col = c("steelblue", "darkorange")
+)
+
 # Finding:
 
 
@@ -479,6 +492,33 @@ title(
   ylab = "Bill Amount Variables"
 )
 
+# Heatmap for the payment correlation (same method as the bills)
+image(
+  x = 1:6,
+  y = 1:6,
+  z = payment_correlation,
+  col = bill_colors,
+  axes = FALSE,
+  xlab = "",
+  ylab = "",
+  main = "Correlation Between Monthly Payment Amounts"
+)
+
+axis(1, at = 1:6, labels = colnames(payment_correlation))
+axis(2, at = 1:6, labels = rownames(payment_correlation))
+
+text(
+  x = rep(1:6, each = 6),
+  y = rep(1:6, times = 6),
+  labels = sprintf("%.2f", as.vector(payment_correlation)),
+  cex = 0.9
+)
+
+title(
+  xlab = "Payment Amount Variables",
+  ylab = "Payment Amount Variables"
+)
+
 # Finding:
 
 
@@ -619,20 +659,21 @@ credit_encoded$SEX_FEMALE <- ifelse(credit_encoded$SEX == 2, 1, 0)
 credit_encoded$EDUCATION <- factor(
   credit_encoded$EDUCATION,
   levels = 1:4,
-  labels = c("GradSchool", "University", "HighSchool", "Other")
+  labels = c("Edu_GradSchool", "Edu_University", "Edu_HighSchool", "Edu_Other")
 )
 
 credit_encoded$MARRIAGE <- factor(
   credit_encoded$MARRIAGE,
   levels = 1:3,
-  labels = c("Married", "Single", "Other")
+  labels = c("Mar_Married", "Mar_Single", "Mar_Other")
 )
 
 # One 0/1 column for each category
-education_dummies <- model.matrix(~ EDUCATION - 1, data = credit_encoded)
-marriage_dummies  <- model.matrix(~ MARRIAGE - 1, data = credit_encoded)
+education_dummies <- dcast(data = credit_encoded[, c("ID", "EDUCATION")], ID ~ EDUCATION, length)
+marriage_dummies  <- dcast(data = credit_encoded[, c("ID", "MARRIAGE")], ID ~ MARRIAGE, length)
 
-credit_encoded <- cbind(credit_encoded, education_dummies, marriage_dummies)
+credit_encoded <- merge(credit_encoded, education_dummies, by = "ID")
+credit_encoded <- merge(credit_encoded, marriage_dummies, by = "ID")
 
 # Remove the original columns (they are encoded now)
 credit_encoded$SEX       <- NULL
@@ -646,3 +687,90 @@ credit_encoded$MARRIAGE  <- NULL
 head(credit_encoded)
 dim(credit_encoded)
 
+
+# ============ PRINCIPAL COMPONENT ANALYSIS (PCA) ============
+
+# Remove the ID and the target variable before PCA
+# (ID is only an identifier and default is what we want to explain)
+pca_data <- credit_encoded[
+  , !(names(credit_encoded) %in% c("ID", "default.payment.next.month"))
+]
+
+# Apply PCA
+# The variables are scaled because they use very different units
+pca_result <- prcomp(pca_data, center = TRUE, scale. = TRUE)
+
+# Variance explained by each component
+summary(pca_result)
+
+
+# ======== Variance Explained by Components ========
+
+# Proportion of variance explained by each component
+pca_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+cumulative_variance <- cumsum(pca_variance)
+
+# Scree plot (first 10 components)
+barplot(
+  pca_variance[1:10],
+  names.arg = paste0("PC", 1:10),
+  main = "Scree Plot - Variance Explained by Each Component",
+  xlab = "Principal Component",
+  ylab = "Proportion of Variance",
+  col = "lightblue"
+)
+
+# Cumulative variance
+plot(
+  cumulative_variance,
+  type = "b",
+  pch = 16,
+  col = "steelblue",
+  main = "Cumulative Variance Explained",
+  xlab = "Number of Components",
+  ylab = "Cumulative Proportion of Variance",
+  ylim = c(0, 1)
+)
+
+# Reference line at 80%
+abline(h = 0.80, col = "darkorange", lty = 2)
+
+# Number of components needed to explain at least 80% of the variance
+summary(pca_result)$importance[3, ]
+
+
+# ======== Interpret PCA Loadings ========
+
+# Loadings of the first three components
+round(pca_result$rotation[, 1:3], 2)
+
+# Variables with the biggest contribution to PC1
+fviz_contrib(pca_result, choice = "var", axes = 1, top = 10)
+
+# Variables with the biggest contribution to PC2
+fviz_contrib(pca_result, choice = "var", axes = 2, top = 10)
+
+
+# ======== Customers on the First Two Components ========
+
+plot(
+  pca_result$x[, 1],
+  pca_result$x[, 2],
+  col = ifelse(
+    credit_encoded$default.payment.next.month == 1,
+    "darkorange",
+    "steelblue"
+  ),
+  pch = 16,
+  cex = 0.5,
+  main = "Customers on PC1 and PC2 by Default Status",
+  xlab = "PC1",
+  ylab = "PC2"
+)
+
+legend(
+  "topright",
+  legend = c("No Default", "Default"),
+  col = c("steelblue", "darkorange"),
+  pch = 16
+)
